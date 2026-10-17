@@ -1,0 +1,160 @@
+# Finance bot — infrastructure.
+#
+# Only PostgreSQL is required. Redis (BullMQ background queue) is OPTIONAL and sits behind the "queue"
+# profile; the bot works without it (see docs/operations/queues.md).
+# Ollama runs on the host (`ollama serve`), not in Docker.
+#
+# Config comes from a `.env` file (copy .env.example). Real values never live here.
+name: finance-bot
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: finance-bot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-finance_bot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (see .env.example)}
+      POSTGRES_DB: ${POSTGRES_DB:-finance_bot}
+    ports:
+      # Loopback only: the database is never reachable from the network.
+      # 15432 on purpose: 5432 is commonly taken by other Postgres containers, and ports at or above
+      # 49152 (the Windows dynamic range) get reserved at random after a reboot, which made 55432 fail with
+      # "forbidden by its access permissions".
+      - "127.0.0.1:${POSTGRES_PORT:-15432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Declared limits only bind a container created AFTER they were written: `npm run docker:verify` compares
+    # them with what the running container really has (a container created earlier keeps running without them
+    # until `docker compose up -d postgres` recreates it; the named volume keeps the data).
+    mem_limit: 1g
+    cpus: 1.0
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-finance_bot} -d $${POSTGRES_DB:-finance_bot}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ---- Optional background queue (BullMQ). Not started by `npm run db:up`: the bot works without it, reading
+  # receipt photos in-process. Turn it on with:   docker compose --profile queue up -d --wait redis
+  # and set REDIS_URL=redis://127.0.0.1:16379 in .env (see docs/operations/queues.md). PostgreSQL stays the
+  # only source of truth: Redis holds job REFERENCES (ids, a Telegram file id), never a photo, text or amount.
+  #   noeviction : BullMQ keeps queue state in keys without a TTL; an LRU policy could silently drop jobs.
+  #   AOF always + volume : queued jobs survive a Redis restart or kill -9; an enqueue is acknowledged only after it reached
+  #                         the disk. the bot enqueues a handful of jobs per hour, so the fsync per write costs nothing.
+  #   REDIS_PASSWORD (optional) : if set, REDIS_URL must carry it (redis://:password@127.0.0.1:16379).
+  redis:
+    profiles: ["queue"]
+    image: redis:7-alpine
+    container_name: finance-bot-redis
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    command:
+      - sh
+      - -c
+      - exec redis-server --maxmemory 256mb --maxmemory-policy noeviction --appendonly yes --appendfsync always $${REDIS_PASSWORD:+--requirepass "$$REDIS_PASSWORD"}
+    ports:
+      # Loopback only, like PostgreSQL.
+      - "127.0.0.1:${REDIS_PORT:-16379}:6379"
+    volumes:
+      - redisdata:/data
+    mem_limit: 384m
+    cpus: 0.5
+    healthcheck:
+      test: ["CMD-SHELL", 'if [ -n "$$REDIS_PASSWORD" ]; then REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli ping; else redis-cli ping; fi | grep -q PONG']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ---- The bot itself, for a server (VPS). Not started by `npm run db:up` (that only starts postgres):
+  # the "app" profile keeps a second bot from polling next to the one you run with `npm run start:dev`.
+  #   docker compose --profile app up -d --build      see docs/operations/vps-deploy.md
+  # Nothing is published on the host: Telegram runs on long polling, and the API listens on 127.0.0.1
+  # inside the container only (the healthcheck runs there).
+  migrate:
+    profiles: ["app"]
+    image: finance-bot-app:latest
+    build: &app-build
+      context: .
+    restart: "no"
+    command: ["npx", "prisma", "migrate", "deploy"]
+    environment:
+      DATABASE_URL: &database-url postgresql://${POSTGRES_USER:-finance_bot}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-finance_bot}?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app:
+    profiles: ["app"]
+    image: finance-bot-app:latest
+    build: *app-build
+    container_name: finance-bot-app
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      HOST: 127.0.0.1
+      PORT: "3000"
+      LOG_LEVEL: ${LOG_LEVEL_APP:-info}
+      LOG_PRETTY: "false"
+      TZ: ${TZ:-Asia/Jakarta}
+      DATABASE_URL: *database-url
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?set TELEGRAM_BOT_TOKEN in .env}
+      TELEGRAM_ALLOWED_USER_IDS: ${TELEGRAM_ALLOWED_USER_IDS:?set TELEGRAM_ALLOWED_USER_IDS in .env}
+      TELEGRAM_POLLING: "true"
+      AI_PROVIDER: ${AI_PROVIDER:-ollama}
+      # Ollama on the host (`ollama serve`) is reachable as host.docker.internal; with no Ollama the bot still
+      # works (deterministic receipt reader, no AI answers). APP_OLLAMA_BASE_URL (not OLLAMA_BASE_URL) on purpose:
+      # .env.example has OLLAMA_BASE_URL=http://127.0.0.1:11434 for the host, which is wrong inside a container.
+      OLLAMA_BASE_URL: ${APP_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-}
+      RECEIPT_AI_MODE: ${RECEIPT_AI_MODE:-auto}
+      # Optional background queue. Empty = off (receipts are read in-process). To use the compose Redis on this
+      # server: run with `--profile app --profile queue` and set APP_REDIS_URL=redis://redis:6379 in .env
+      # (APP_REDIS_URL, not REDIS_URL, for the same reason as APP_OLLAMA_BASE_URL: the host value points at
+      # 127.0.0.1, which inside this container is the container itself). With REDIS_PASSWORD set, the URL must
+      # carry it: redis://:password@redis:6379
+      REDIS_URL: ${APP_REDIS_URL:-}
+      REDIS_KEY_PREFIX: ${REDIS_KEY_PREFIX:-finance-bot:}
+      # redis://redis:6379 is not loopback, so the app REQUIRES a password in the URL (REDIS_PASSWORD above) unless you
+      # explicitly accept an open Redis on this private compose network:
+      REDIS_ALLOW_UNAUTHENTICATED: ${REDIS_ALLOW_UNAUTHENTICATED:-false}
+      RECEIPT_WORKER_CONCURRENCY: ${RECEIPT_WORKER_CONCURRENCY:-1}
+      RECEIPT_JOB_ATTEMPTS: ${RECEIPT_JOB_ATTEMPTS:-3}
+      RECEIPT_JOB_BACKOFF_SECONDS: ${RECEIPT_JOB_BACKOFF_SECONDS:-5}
+      RECEIPT_JOB_TIMEOUT_SECONDS: ${RECEIPT_JOB_TIMEOUT_SECONDS:-300}
+      REDIS_CONNECT_TIMEOUT_MS: ${REDIS_CONNECT_TIMEOUT_MS:-2000}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # Tesseract language data (one-time download, see the doc); not personal data.
+      - appdata:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1g
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health/ready').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  pgdata:
+  appdata:
+  redisdata:

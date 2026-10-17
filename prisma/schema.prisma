@@ -1,0 +1,232 @@
+// Finance bot — PostgreSQL schema (single source of truth).
+//
+// Money rule: amounts are exact integers in *minor units* (rupiah x 100, the same scale as the
+// `Money` value object), stored as BIGINT. There is no float anywhere in the money path.
+// Balances are NOT stored: they are derived from transactions + transfers, so they cannot drift
+// (see docs/architecture.md).
+//
+// Constraints that Prisma cannot express (CHECKs) live in the migration SQL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+/// The two supported wallets. A transaction without a wallet counts as CASH.
+enum Wallet {
+  CASH
+  DIGITAL
+}
+
+/// Which wallets a user works with. NULL = not chosen yet.
+enum WalletMode {
+  CASH
+  DIGITAL
+  BOTH
+}
+
+enum BudgetPeriod {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum ConversationState {
+  IDLE
+  AWAITING_AMOUNT
+  AWAITING_WALLET
+  AWAITING_WALLET_MODE
+  AWAITING_OPENING_BALANCE
+  AWAITING_CATEGORY
+  AWAITING_CONFIRM
+  AWAITING_DELETE_CONFIRM
+  AWAITING_RECEIPT_CONFIRM
+}
+
+enum ReceiptStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+}
+
+model User {
+  id            String      @id @default(uuid())
+  /// Telegram user id (identity key). Never taken from message text.
+  telegramId    String      @unique @map("telegram_id")
+  chatId        String?     @map("chat_id")
+  displayName   String?     @map("display_name")
+  currency      String      @default("IDR")
+  timezone      String      @default("Asia/Jakarta")
+  isOnboarded   Boolean     @default(false) @map("is_onboarded")
+  walletMode    WalletMode? @map("wallet_mode")
+  defaultWallet Wallet?     @map("default_wallet")
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  categories   Category[]
+  transactions Transaction[]
+  transfers    Transfer[]
+  budgets      Budget[]
+  conversation Conversation?
+  receipts     ReceiptDraft[]
+
+  @@map("users")
+}
+
+model Category {
+  id        String          @id
+  /// NULL = system (shared) category. System ids are deterministic (`system-<type>-<slug>`),
+  /// which makes seeding idempotent.
+  userId    String?         @map("user_id")
+  name      String
+  type      TransactionType
+  icon      String?
+  isSystem  Boolean         @default(false) @map("is_system")
+  /// Normalised keywords used for automatic categorisation.
+  keywords  String[]
+  createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user         User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  budgets      Budget[]
+
+  @@unique([userId, name, type])
+  @@index([type])
+  @@map("categories")
+}
+
+model Transaction {
+  id             String          @id @default(uuid())
+  userId         String          @map("user_id")
+  categoryId     String?         @map("category_id")
+  type           TransactionType
+  /// Exact amount in minor units (rupiah x 100). CHECK > 0 in migration SQL.
+  amountMinor    BigInt          @map("amount_minor")
+  description    String
+  /// Marker/free note. `SALDO_AWAL` marks a wallet's opening-balance income entry.
+  note           String?
+  occurredAt     DateTime        @map("occurred_at") @db.Timestamptz(3)
+  /// Original message text (kept so a wrong parse can be audited by its owner).
+  sourceMessage  String?         @map("source_message")
+  /// Idempotency key. Chat transactions use `<chatId>:<messageId>[#<item>]`. Unique per user,
+  /// so a retried or duplicated update can never insert a second row.
+  idempotencyKey String?         @map("idempotency_key")
+  wallet         Wallet?
+  deletedAt      DateTime?       @map("deleted_at") @db.Timestamptz(3)
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, occurredAt])
+  @@index([userId, createdAt])
+  @@index([userId, note])
+  @@map("transactions")
+}
+
+/// Money moved between a user's own wallets. Not income or expense.
+model Transfer {
+  id             String    @id @default(uuid())
+  userId         String    @map("user_id")
+  fromWallet     Wallet    @map("from_wallet")
+  toWallet       Wallet    @map("to_wallet")
+  /// CHECK > 0 and from_wallet <> to_wallet in migration SQL.
+  amountMinor    BigInt    @map("amount_minor")
+  note           String?
+  occurredAt     DateTime  @map("occurred_at") @db.Timestamptz(3)
+  idempotencyKey String?   @map("idempotency_key")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, occurredAt])
+  @@map("transfers")
+}
+
+model Budget {
+  id             String       @id @default(uuid())
+  userId         String       @map("user_id")
+  /// NULL = overall budget.
+  categoryId     String?      @map("category_id")
+  /// `categoryId` or `ALL`: gives "one budget per (user, scope, period)" a real unique key even
+  /// for the overall budget (a NULL category would not be unique in PostgreSQL).
+  scopeKey       String       @map("scope_key")
+  amountMinor    BigInt       @map("amount_minor")
+  period         BudgetPeriod
+  /// Percent of the limit at which a warning is sent (1..100, CHECK in migration SQL).
+  alertThreshold Int          @default(80) @map("alert_threshold")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, scopeKey, period])
+  @@map("budgets")
+}
+
+/// Multi-turn chat state: one row per user.
+model Conversation {
+  id        String            @id @default(uuid())
+  userId    String            @unique @map("user_id")
+  state     ConversationState @default(IDLE)
+  payload   Json?
+  expiresAt DateTime?         @map("expires_at") @db.Timestamptz(3)
+  createdAt DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("conversations")
+}
+
+/// A receipt extraction waiting for the user's confirmation. It is NOT a transaction: only a
+/// confirmation turns it into one. The image itself is never stored, only its SHA-256.
+model ReceiptDraft {
+  id            String        @id @default(uuid())
+  userId        String        @map("user_id")
+  status        ReceiptStatus @default(PENDING)
+  imageSha256   String        @map("image_sha256")
+  /// Validated extraction (schema-checked JSON), editable by the user before confirming.
+  extraction    Json
+  expiresAt     DateTime      @map("expires_at") @db.Timestamptz(3)
+  /// Set once on confirmation; unique so one draft can only ever create one transaction.
+  transactionId String?       @unique @map("transaction_id")
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, imageSha256])
+  @@index([userId, status])
+  @@map("receipt_drafts")
+}
+
+/// Append-only trail of financial and administrative events: WHAT happened to WHICH record, never the
+/// amounts, merchants or message text. `user_id` has no foreign key on purpose, so the trail survives a
+/// "reset my data" (the point of an audit). Written best-effort by the application; pruned by retention.
+model AuditEvent {
+  id        String   @id @default(uuid())
+  userId    String?  @map("user_id")
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+  @@map("audit_events")
+}

@@ -1,0 +1,4 @@
+# Shell scripts and SQL run on Linux (VPS, containers) as well as Git Bash: always LF, even when
+# core.autocrlf=true on Windows. A CRLF here breaks bash ("pipefail\r: invalid option name").
+*.sh  text eol=lf
+*.sql text eol=lf
