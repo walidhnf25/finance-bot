@@ -6,6 +6,25 @@ import { ReplyBuilder } from './reply-builder';
 describe('ReplyBuilder', () => {
   const replies = new ReplyBuilder();
 
+  it('tells the user a receipt may already be recorded, and how to avoid the double entry', () => {
+    const text = replies.receiptPreview(
+      {
+        merchant: 'Indomaret',
+        date: '2026-10-12',
+        total: 45000,
+        items: [],
+        categoryHint: null,
+        wallet: null,
+        warnings: ['POSSIBLE_DUPLICATE'],
+      },
+      null,
+      'Asia/Jakarta',
+    );
+    expect(text).toContain('Sudah ada pengeluaran dengan nominal dan tanggal yang sama');
+    expect(text).toContain('*batal*');
+    expect(text).toContain('Balas *ya* untuk mencatat');
+  });
+
   it('builds an onboarding message with the name', () => {
     const msg = replies.onboarding('Budi');
     expect(msg).toContain('Budi');

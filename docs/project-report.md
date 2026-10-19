@@ -135,10 +135,10 @@ Legenda: **VERIFIED** = dijalankan dan lulus · **PARTIAL** = sebagian terbukti 
 
 | Ukuran | Hasil |
 |---|---|
-| Unit / integrasi (PostgreSQL asli) / e2e (HTTP webhook asli) | **1.090 / 169 / 82** lulus, ditambah antrean **26** (Redis nyata) dan injeksi kegagalan **18** (Docker); `npm run verify` exit 0 |
+| Unit / integrasi (PostgreSQL asli) / e2e (HTTP webhook asli) | **1.111 / 177 / 84** lulus, ditambah antrean **26** (Redis nyata) dan injeksi kegagalan **18** (Docker); `npm run verify` exit 0 |
 | Typecheck, lint (0 error, 0 warning), format, build | lulus |
 | Soak (simulasi Telegram, PostgreSQL asli, kegagalan disuntik, restart) | 10 menit: 14.788 iterasi, 8.889 catatan = 8.889 baris, 3.390 struk = 3.390 draf `CONFIRMED`, 2.505 kegagalan DB disuntik, 59 restart + 708 pemutaran ulang → **0 duplikat** |
-| Uji mutasi pada guard uang/identitas/data | **89 mutan**: 81 terbunuh asersi, 8 oleh error aplikasi saja, **0 selamat**, 0 tak valid |
+| Uji mutasi pada guard uang/identitas/data | **97 mutan**: 89 terbunuh asersi, 8 oleh error aplikasi saja, **0 selamat**, 0 tak valid |
 | Image Docker | terbangun; migrasi dari database kosong, OCR, crash, penghentian rapi, persistensi, tanpa Ollama (kontainer terpisah, token palsu) |
 | `npm run docker:verify` | hijau pada kontainer yang berjalan (memori 1 GiB, CPU 1,0, restart, hanya loopback) |
 
@@ -173,7 +173,7 @@ Tingkat di bawah ini indikatif, bukan hasil audit.
 |---|---|---|---|
 | R1 | `npm audit` produksi: temuan di rantai CLI Prisma (`deepmerge-ts`); ditangani dengan `overrides` terlingkup; tidak terjangkau di runtime bot | rendah | ditangani, lihat [dependensi](security/dependency-and-secret-review.md) |
 | R2 | Cadangan hanya di komputer yang sama; tanpa enkripsi disk dari aplikasi | sedang | salin cadangan terenkripsi ke luar mesin secara berkala |
-| R3 | Struk yang sama dikirim ulang sebagai **berkas berbeda** (difoto lagi) menjadi dua draf dan dua transaksi. Berkas dengan isi identik sudah dicegah oleh `UNIQUE(user_id, image_sha256)`; yang belum ada adalah peringatan "mirip" berdasarkan toko, tanggal, dan total | rendah (integritas tidak rusak, perilaku) | terbuka, belum dibuat |
+| R3 | Struk yang sama difoto ulang sebagai **berkas berbeda** tetap bisa menjadi dua draf dan dua transaksi bila pengguna membalas `ya` dua kali. Berkas dengan isi identik dicegah oleh `UNIQUE(user_id, image_sha256)`. Untuk berkas berbeda, pratinjau memberi peringatan `POSSIBLE_DUPLICATE` bila sudah ada pengeluaran dengan nominal dan tanggal (zona waktu pengguna) yang sama; pengguna yang memutuskan, dan kecocokan tidak memeriksa nama toko | rendah (integritas tidak rusak; hanya peringatan) | dikurangi: peringatan ada, pencegahan otomatis tidak |
 | R4 | Pembaca struk bisa salah membaca digit total tanpa baris tunai/kembalian dan tanggal tanpa peringatan; keamanannya bertumpu pada pratinjau dan balasan `ya` dari pengguna | rendah–sedang | diterima sebagai batasan, terdokumentasi |
 | R5 | `ya` kedua dan pemutaran ulang update belum terbukti dengan Telegram nyata | rendah | terbukti di e2e/soak, tidak bisa dipicu dari sini |
 | R6 | Jalur Docker/VPS belum dicoba dengan token asli, Ollama di host Linux, atau server sungguhan | sedang saat deploy | terbuka, terdokumentasi di [vps-deploy.md](operations/vps-deploy.md) |
@@ -188,7 +188,7 @@ Tingkat di bawah ini indikatif, bukan hasil audit.
 1. Jalankan uji Telegram nyata dengan akun uji ([langkah manual](testing/telegram-acceptance-manual.md)).
 2. Tinjauan manusia atau pihak ketiga atas pengurai obrolan dan alur reset (bagian yang paling bernilai untuk data keuangan pribadi).
 3. Jalankan di VPS dengan token asli sekali, periksa log, lalu perbarui laporan ini.
-4. R3 (struk kembar dari berkas berbeda) dan R4 (salah baca total tanpa peringatan) adalah pekerjaan nyata berikutnya yang paling mungkin.
+4. R4 (salah baca total tanpa peringatan) adalah pekerjaan nyata berikutnya yang paling mungkin; R3 masih bergantung pada pengguna membaca peringatan.
 
 ## 6. Batasan dan yang tidak diklaim
 
@@ -207,7 +207,7 @@ Tingkat di bawah ini indikatif, bukan hasil audit.
 | Autentikasi pada API HTTP | API hanya loopback dan tidak memuat data keuangan (hanya banner, health, dan webhook yang dijaga secret); menambah login tanpa kebutuhan hanya menambah permukaan |
 | Peringatan aktif (alerting) atas metrik | `/metrics` tersedia; tidak ada Prometheus/Grafana/alert yang dipasang (satu pengguna) |
 | Redis/BullMQ sebagai keharusan | antrean opsional (mati secara bawaan, fallback dalam proses); kuota Redis bersama dan peran proses `gateway`/`worker` terpisah tidak dibuat (satu pengguna, satu proses) |
-| Peringatan "mirip struk yang sudah dicatat" | berkas dengan isi identik sudah dicegah; deteksi struk yang sama dari **berkas berbeda** (toko + tanggal + total sama) adalah fitur baru, belum diminta |
+| Pemblokiran otomatis struk kembar | struk dari berkas berbeda hanya diberi peringatan (nominal + tanggal sama), tidak diblokir, karena dua pembelian kembar pada hari yang sama adalah hal yang sah |
 | CI di GitHub | pengujian dijalankan dengan `npm run verify` |
 | Skrip start/stop/auto-start Windows | bot dinyalakan manual |
 | Dukungan database terkelola pada skrip cadangan | skrip memakai `docker exec` ke kontainer PostgreSQL; ganti ke `pg_dump` lewat jaringan bila suatu saat dibutuhkan |
@@ -230,5 +230,5 @@ Karena ini data keuangan pribadi: cadangan terenkripsi dan dibaca-balik, pemerik
 ## Lihat juga
 
 [Arsitektur](architecture.md) · [Keamanan](security.md) · [Model ancaman](security/threat-model.md) · [Perlindungan data](security/data-protection.md) · [Dependensi dan rahasia](security/dependency-and-secret-review.md) ·
-[Evaluasi OCR](testing/receipt-ocr-evaluation.md) · [Strategi tes](testing/test-strategy-and-coverage.md) · [Kualitas tes](engineering/test-quality-review.md) · [Deploy ke VPS](operations/vps-deploy.md) ·
+[Evaluasi OCR](testing/receipt-ocr-evaluation.md) · [Strategi tes](testing/test-strategy-and-coverage.md) · [Kualitas tes](engineering/test-quality-review.md) · [Peningkatan keandalan dan keamanan](engineering/hardening-and-improvements.md) · [Deploy ke VPS](operations/vps-deploy.md) ·
 [Cadangan terjadwal](operations/vps-backup-cron.md) · [Runbook](runbook.md)

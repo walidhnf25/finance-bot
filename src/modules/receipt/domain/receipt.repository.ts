@@ -1,3 +1,4 @@
+import { Money } from 'src/shared/utils/money';
 import {
   CreateTransactionInput,
   TransactionEntity,
@@ -65,6 +66,13 @@ export abstract class ReceiptRepository {
   ): Promise<boolean>;
 
   abstract cancel(userId: string, draftId: string): Promise<boolean>;
+
+  /**
+   * Whether the user already has a live (not deleted) EXPENSE of exactly this amount that happened in
+   * [from, to). Used to warn about the same receipt photographed twice: two different image files of one
+   * receipt have different hashes, so the image check cannot see it.
+   */
+  abstract hasExpenseLike(userId: string, amount: Money, from: Date, to: Date): Promise<boolean>;
 
   /** Drafts the user created since `since` (counts every status): the hourly limit input. */
   abstract countSince(userId: string, since: Date): Promise<number>;

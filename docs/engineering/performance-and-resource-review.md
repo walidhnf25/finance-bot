@@ -43,7 +43,7 @@ Batasan: soak memakai transport simulasi dan OCR/AI palsu; ia tidak mengukur lat
 ## 3. Latensi yang diketahui
 
 Dari evaluasi OCR (`testing/receipt-ocr-evaluation.md`): OCR mayoritas < 0,3 detik, p95 ±10 detik (percobaan kedua pada gambar sulit); model teks 4B di CPU 17–18 detik median dan 25–31 detik p95.
-Karena itu `RECEIPT_AI_MODE=auto` (model hanya bila pembaca ragu) adalah bawaan. **Diukur:** `receipt:eval` (75 gambar sintetis + 1 nyata) OCR median **150 ms**, p95 **10,6 s**, total tepat 85 % (57/67); `receipt:live-check` dengan Ollama nyata (`qwen3:4b-instruct`, tanpa vision, CPU) membaca struk sintetis dalam **34,9 s** (total benar 16.500).
+Karena itu `RECEIPT_AI_MODE=auto` (model hanya bila pembaca ragu) adalah bawaan. **Diukur:** `receipt:eval` (75 gambar sintetis + 1 nyata) OCR median **168 ms**, p95 **11,5 s**, total tepat 85 % (57/67); `receipt:live-check` dengan Ollama nyata (`qwen3:4b-instruct`, tanpa vision, CPU) membaca struk sintetis dalam **34,9 s** (total benar 16.500).
 
 ## 4. Titik panas yang diketahui
 

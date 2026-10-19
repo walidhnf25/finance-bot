@@ -68,6 +68,7 @@ npm run db:restore-rehearsal  # restore ke kontainer sekali pakai, bandingkan de
 | Model lambat | naikkan `OLLAMA_TIMEOUT_MS` atau pakai model lebih kecil; bot jatuh ke pembaca deterministik saat timeout |
 | Draf kedaluwarsa | kirim ulang fotonya (TTL `RECEIPT_PENDING_TTL_MINUTES`) |
 | "Struk ini sudah tercatat" | foto yang sama (hash identik) sudah dikonfirmasi; hapus transaksinya (`hapus`) bila ingin mencatat ulang |
+| Pratinjau berisi "Sudah ada pengeluaran dengan nominal dan tanggal yang sama" | struk yang sama mungkin difoto ulang (berkas berbeda). Bila itu struk yang sama, balas `batal`; bila memang pembelian lain dengan nominal sama, balas `ya`. Koreksi `total …` atau `tanggal …` memeriksa ulang peringatan ini |
 
 Uji nyata tanpa Telegram: `npm run receipt:live-check` (struk sintetis) atau `-- foto.jpg` untuk fotomu.
 

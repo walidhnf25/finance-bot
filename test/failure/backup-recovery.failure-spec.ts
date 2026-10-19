@@ -24,7 +24,14 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { docker, Disposable, DisposablePostgres, sleep, startDisposablePostgres } from './docker';
+import {
+  docker,
+  Disposable,
+  DisposablePostgres,
+  sleep,
+  startDisposablePostgres,
+  waitFor,
+} from './docker';
 
 const BASH =
   [process.env.FINANCE_BOT_BASH, 'C:/Program Files/Git/bin/bash.exe', '/bin/bash']
@@ -259,6 +266,15 @@ describe('backup and restore under failure (real scripts, throw-away database)',
     expect(sha(goodFile)).toBe(goodHash); // the earlier backup is untouched
 
     pg.start();
+    // crash recovery after the kill can take a while (the dump was ~100 MB): wait until it answers queries
+    await waitFor(() => {
+      try {
+        pg.run('SELECT 1');
+        return true;
+      } catch {
+        return false;
+      }
+    }, 120_000);
     pg.run('DROP TABLE filler');
   });
 

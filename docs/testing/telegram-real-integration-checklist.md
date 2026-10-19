@@ -70,7 +70,7 @@ Hapus transaksi uji dari chat (`hapus` menghapus transaksi terakhir dengan konfi
 
 ## 4. Apa yang masih tidak bisa dibuktikan
 
-- Struk yang sama dikirim ulang sebagai **berkas berbeda** (difoto lagi) menghasilkan dua draf dan dua transaksi; berkas dengan isi identik sudah dicegah oleh `UNIQUE(user_id, image_sha256)`. Tidak ada peringatan struk mirip; ini batasan perilaku, bukan cacat integritas.
+- Struk yang sama dikirim ulang sebagai **berkas berbeda** (difoto lagi) menjadi draf baru; berkas dengan isi identik dicegah oleh `UNIQUE(user_id, image_sha256)`. Pratinjau memberi peringatan bila sudah ada pengeluaran dengan nominal dan tanggal yang sama, tetapi tidak memblokir: pengguna yang memutuskan (`ya` atau `batal`).
 - Pemutaran ulang **update Telegram yang sama** dari Telegram nyata (Telegram tidak menyediakan cara memicunya); yang dibuktikan
   adalah penolakan database terhadap kunci ganda pada baris nyata dan pemutaran ulang di tes otomatis.
 - Perilaku selama berjam-jam/berhari-hari dengan jaringan tidak stabil; soak simulasi dan tes kegagalan hanya pendekatan.

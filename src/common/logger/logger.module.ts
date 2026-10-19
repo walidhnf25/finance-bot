@@ -5,6 +5,26 @@ import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 /**
+ * Fields removed from every log line. The app never logs these on purpose (errors are logged by class
+ * name only); this is the safety net for the day someone logs a whole object by mistake.
+ */
+export const LOG_REDACT_PATHS = [
+  'req.headers.authorization',
+  'req.headers.cookie',
+  'req.headers["x-telegram-bot-api-secret-token"]',
+  'req.body.password',
+  '*.password',
+  '*.token',
+  '*.botToken',
+  '*.secret',
+  '*.webhookSecret',
+  '*.apiKey',
+  '*.passphrase',
+  '*.databaseUrl',
+  '*.redisUrl',
+];
+
+/**
  * Structured logging via Pino.
  * - Pretty, colorized output in dev; single-line JSON in prod.
  * - Injects/propagates an `x-request-id` correlation id per request.
@@ -30,13 +50,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
             // Disabled: LoggingInterceptor is the single source of request logs.
             autoLogging: false,
             redact: {
-              paths: [
-                'req.headers.authorization',
-                'req.headers.cookie',
-                'req.body.password',
-                '*.password',
-                '*.token',
-              ],
+              paths: LOG_REDACT_PATHS,
               remove: true,
             },
             transport: pretty

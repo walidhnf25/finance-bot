@@ -6,13 +6,13 @@ Tanpa CI: gerbang satu perintah adalah `npm run verify`.
 
 | Tingkat | Perintah | Jumlah | Memakai | Yang dibuktikan |
 |---|---|---|---|---|
-| Unit | `npm test` | **1.090** tes di 54 suite | tanpa database | aturan murni: uang, pengurai, validasi struk, breaker, antrean OCR, metrik, interpretasi ya/tidak, interceptor, logika verifikator Docker |
-| Integrasi | `npm run test:integration` | **169** tes di 10 suite | PostgreSQL asli (`finance_bot_test` saja, dijaga `db-guard.ts`) | constraint DB, idempotensi, konkurensi, isolasi, migrasi pada data nyata, audit/retensi |
-| E2E | `npm run test:e2e` | **82** tes di 6 suite | aplikasi utuh lewat HTTP webhook asli, Telegram diganti penangkap | alur pengguna, ketahanan, siklus hidup, observabilitas, privasi log |
+| Unit | `npm test` | **1.111** tes di 55 suite | tanpa database | aturan murni: uang, pengurai, validasi struk, breaker, antrean OCR, metrik, interpretasi ya/tidak, interceptor, logika verifikator Docker |
+| Integrasi | `npm run test:integration` | **177** tes di 10 suite | PostgreSQL asli (`finance_bot_test` saja, dijaga `db-guard.ts`) | constraint DB, idempotensi, konkurensi, isolasi, migrasi pada data nyata, audit/retensi |
+| E2E | `npm run test:e2e` | **84** tes di 6 suite | aplikasi utuh lewat HTTP webhook asli, Telegram diganti penangkap | alur pengguna, ketahanan, siklus hidup, observabilitas, privasi log |
 | Antrean | `npm run test:queue` | **26** tes di 2 suite | **Redis nyata** (kontainer profil `queue`, database 15) + PostgreSQL | BullMQ: dedupe, retry, dead letter, payload palsu, restart, shutdown, konkurensi, jadwal; pembacaan struk lewat antrean, fallback saat Redis mati |
 | Kegagalan | `npm run test:failure` | **18** tes di 4 suite | Docker: PostgreSQL dan Redis **sekali-pakai** yang di-stop/kill di bawah bot; skrip cadangan nyata; kontainer Linux | PostgreSQL mati/kill → 503, hidup, pulih, tepat sekali; Redis kill → fallback, pulih, AOF; cadangan terputus, ruang penuh, passphrase salah, file rusak, `.part` basi, gerbang integritas, peran database terbatas |
 | Soak | `npm run test:soak` (`SOAK_SECONDS=…`) | 1 skenario | PostgreSQL asli, kegagalan disuntik, restart | invarian jangka panjang |
-| Mutasi | `npm run test:mutation` | **89** mutan | salinan kerja sementara | tes benar-benar gagal bila guard dilemahkan |
+| Mutasi | `npm run test:mutation` | **97** mutan | salinan kerja sementara | tes benar-benar gagal bila guard dilemahkan |
 | Evaluasi OCR | `npm run receipt:eval` | 75 gambar sintetis + 1 nyata | OCR nyata | akurasi terukur, bukan klaim umum |
 | Live | `npm run receipt:live-check` | – | Ollama nyata | pemeriksaan manual pipeline OCR + model |
 
@@ -32,7 +32,7 @@ Tanpa CI: gerbang satu perintah adalah `npm run verify`.
 
 ## 3. Cakupan (unit saja, `npm run test:cov`)
 
-Pernyataan **71,66 %**, cabang **69,43 %**, fungsi **65,53 %**, baris **73,43 %**. Penyebut mengeluarkan `evaluation/`, `live-check`, `cli`, `main`. Cakupan unit tidak menghitung
+Pernyataan **71,70 %**, cabang **69,69 %**, fungsi **65,27 %**, baris **73,41 %**. Penyebut mengeluarkan `evaluation/`, `live-check`, `cli`, `main`. Cakupan unit tidak menghitung
 tes integrasi/e2e yang menjalankan repository dan layanan terhadap PostgreSQL; angka itu sengaja **bukan** ukuran kualitas (lihat mutasi).
 Tidak ada ambang cakupan yang dipaksakan; ambang yang dipasang tanpa dasar hanya mendorong tes kosong.
 

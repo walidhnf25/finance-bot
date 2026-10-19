@@ -111,7 +111,7 @@ docs/                   dokumentasi (lihat di bawah)
 ## Dokumentasi
 
 - **[Laporan proyek](docs/project-report.md)** — ringkasan keseluruhan, keamanan, risiko, dan batasan
-- [Arsitektur](docs/architecture.md) · [Invarian keuangan](docs/engineering/financial-integrity-invariants.md) · [Performa](docs/engineering/performance-and-resource-review.md)
+- [Arsitektur](docs/architecture.md) · [Invarian keuangan](docs/engineering/financial-integrity-invariants.md) · [Performa](docs/engineering/performance-and-resource-review.md) · [Peningkatan keandalan dan keamanan](docs/engineering/hardening-and-improvements.md)
 - [Runbook operasional](docs/runbook.md) — start/stop, backup, restore, insiden
 - [Operasi di Windows](docs/operations/windows-operation.md) · [Deploy ke VPS](docs/operations/vps-deploy.md) · [Cadangan terjadwal di VPS](docs/operations/vps-backup-cron.md)
 - [Observabilitas](docs/operations/observability-and-diagnostics.md) · [Antrean Redis (opsional)](docs/operations/queues.md) · [Prosedur migrasi database](docs/operations/migration-procedure.md) · [Peran DB terbatas](docs/operations/db-least-privilege.md)

@@ -25,11 +25,18 @@ export const PROCESSING_FAILED_TEXT =
  *                                                  Telegram redelivers)
  *  - failure on the last attempt      -> the user is told it failed, then 'done' (a poison update
  *                                        must not be redelivered forever)
+ *
+ * Updates of the SAME chat are processed one at a time, in arrival order. The polling loop is already
+ * sequential, but the webhook can deliver two updates of one chat concurrently ("beli kopi" then "25rb"
+ * a moment later), and a multi-step dialog must see the first one's state before it handles the second.
+ * Different chats do not wait for each other.
  */
 @Injectable()
 export class UpdateProcessor {
   private readonly logger = new Logger(UpdateProcessor.name);
   private readonly failures = new Map<number, number>();
+  /** Tail of the work queued for each chat; an entry exists only while that chat has work in flight. */
+  private readonly chats = new Map<string, Promise<unknown>>();
 
   constructor(
     private readonly telegram: TelegramGateway,
@@ -37,6 +44,25 @@ export class UpdateProcessor {
   ) {}
 
   async process(update: TelegramUpdate): Promise<ProcessResult> {
+    const chatId = update.message?.chat?.id;
+    if (chatId === undefined) return this.run(update);
+
+    const key = String(chatId);
+    const previous = this.chats.get(key) ?? Promise.resolve();
+    // `run` handles its own errors; the second handler keeps the chain alive even if one ever escapes.
+    const current = previous.then(
+      () => this.run(update),
+      () => this.run(update),
+    );
+    this.chats.set(key, current);
+    try {
+      return await current;
+    } finally {
+      if (this.chats.get(key) === current) this.chats.delete(key);
+    }
+  }
+
+  private async run(update: TelegramUpdate): Promise<ProcessResult> {
     try {
       await this.telegram.handleUpdate(update);
       this.failures.delete(update.update_id);

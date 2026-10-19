@@ -332,6 +332,13 @@ describe('Finance bot (end to end)', () => {
       expect(body.checks.database.status).toBe('up');
     });
 
+    it('does not announce the framework in a response header', async () => {
+      for (const path of ['/', '/health/live', '/no-such-route']) {
+        const res = await httpOf(t).get(path);
+        expect(res.headers['x-powered-by']).toBeUndefined();
+      }
+    });
+
     it('turns not-ready (503) when the database is unreachable, but stays live', async () => {
       const prisma = t.app.get(PrismaService);
       const ping = jest.spyOn(prisma, 'ping').mockRejectedValue(new Error('connection refused'));

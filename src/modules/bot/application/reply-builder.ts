@@ -494,6 +494,8 @@ export class ReplyBuilder {
       DATE_OLD:
         'Tanggal di struk sudah lama (lebih dari 3 tahun). Cek, atau koreksi: tanggal 12/10/2026.',
       MERCHANT_MISSING: 'Nama toko tidak terbaca.',
+      POSSIBLE_DUPLICATE:
+        'Sudah ada pengeluaran dengan nominal dan tanggal yang sama. Kalau ini struk yang sama, balas *batal* supaya tidak tercatat dua kali.',
     };
     const date = extraction.date
       ? this.plain(extraction.date.split('-').reverse().join('/'))

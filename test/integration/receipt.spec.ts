@@ -221,6 +221,73 @@ describe('receipt drafts (PostgreSQL)', () => {
       expect(await repo.countSince(a.id, new Date(Date.now() - 60_000))).toBe(2);
       expect(await repo.countSince(a.id, new Date(Date.now() + 60_000))).toBe(0);
     });
+
+    describe('hasExpenseLike', () => {
+      const DAY_START = new Date('2026-10-11T17:00:00.000Z'); // 2026-10-12 00:00 in Asia/Jakarta
+      const DAY_END = new Date('2026-10-12T17:00:00.000Z');
+      const record = (userId: string, amount: number, occurredAt: Date, key: string) =>
+        txRepo.create({
+          userId,
+          type: TransactionType.EXPENSE,
+          amount: Money.fromMajor(amount),
+          description: 'x',
+          occurredAt,
+          sourceMessage: 'x',
+          wallet: Wallet.CASH,
+          messageId: key,
+        });
+      const like = (userId: string, amount: number) =>
+        repo.hasExpenseLike(userId, Money.fromMajor(amount), DAY_START, DAY_END);
+
+      it('finds the same amount on the same day, and nothing else', async () => {
+        const u = await createUser(prisma);
+        await record(u.id, 45000, NOW, 'k1');
+        expect(await like(u.id, 45000)).toBe(true);
+        expect(await like(u.id, 45001)).toBe(false); // another amount
+        expect(
+          await repo.hasExpenseLike(
+            u.id,
+            Money.fromMajor(45000),
+            DAY_END,
+            new Date(DAY_END.getTime() + 86_400_000),
+          ),
+        ).toBe(false); // another day
+      });
+
+      it('treats the day as half-open: the start counts, the end does not', async () => {
+        const u = await createUser(prisma);
+        await record(u.id, 10000, DAY_START, 'k1');
+        await record(u.id, 20000, DAY_END, 'k2');
+        expect(await like(u.id, 10000)).toBe(true);
+        expect(await like(u.id, 20000)).toBe(false);
+      });
+
+      it("never looks at another user's expenses", async () => {
+        const a = await createUser(prisma, 'a');
+        const b = await createUser(prisma, 'b');
+        await record(a.id, 45000, NOW, 'k1');
+        expect(await like(b.id, 45000)).toBe(false);
+      });
+
+      it('ignores deleted expenses and income', async () => {
+        const u = await createUser(prisma);
+        const gone = await record(u.id, 30000, NOW, 'k1');
+        if (!gone) throw new Error('expected a transaction');
+        await prisma.transaction.update({ where: { id: gone.id }, data: { deletedAt: NOW } });
+        await txRepo.create({
+          userId: u.id,
+          type: TransactionType.INCOME,
+          amount: Money.fromMajor(50000),
+          description: 'gaji',
+          occurredAt: NOW,
+          sourceMessage: 'x',
+          wallet: Wallet.CASH,
+          messageId: 'k2',
+        });
+        expect(await like(u.id, 30000)).toBe(false);
+        expect(await like(u.id, 50000)).toBe(false);
+      });
+    });
   });
 
   describe('confirm', () => {
@@ -401,6 +468,68 @@ describe('receipt drafts (PostgreSQL)', () => {
       await svc.submit(user, await png(63, 20), NOW);
       const rows = await prisma.receiptDraft.findMany({ orderBy: { createdAt: 'asc' } });
       expect(rows.map((r) => r.status)).toEqual(['CANCELLED', 'PENDING']);
+    });
+
+    describe('the same receipt photographed twice', () => {
+      it('warns on the second photo (a different file), and the warning is only a warning', async () => {
+        const { svc } = service();
+        const user = await userEntity();
+        const first = await svc.submit(user, await png(90, 40), NOW);
+        expect(first.kind).toBe('draft');
+        if (first.kind !== 'draft') return;
+        expect(first.extraction.warnings).not.toContain('POSSIBLE_DUPLICATE');
+        expect((await svc.confirm(user, NOW)).kind).toBe('confirmed');
+
+        const second = await svc.submit(user, await png(91, 90), NOW); // other bytes, same receipt
+        if (second.kind !== 'draft') throw new Error('expected a draft');
+        expect(second.extraction.warnings).toContain('POSSIBLE_DUPLICATE');
+        expect(second.extraction.total).toBe(45000);
+
+        // the warning does not block anything: the user may still confirm it
+        expect((await svc.confirm(user, NOW)).kind).toBe('confirmed');
+        expect(await txCount(user.id)).toBe(2);
+      });
+
+      it('does not warn for another user with the same receipt', async () => {
+        const { svc } = service();
+        const a = await userEntity();
+        const b = await userEntity();
+        await svc.submit(a, await png(92, 40), NOW);
+        await svc.confirm(a, NOW);
+
+        const other = await svc.submit(b, await png(93, 90), NOW);
+        if (other.kind !== 'draft') throw new Error('expected a draft');
+        expect(other.extraction.warnings).not.toContain('POSSIBLE_DUPLICATE');
+      });
+
+      it('re-checks after the user corrects the total or the date', async () => {
+        const { svc } = service();
+        const user = await userEntity();
+        await svc.submit(user, await png(94, 40), NOW);
+        await svc.confirm(user, NOW);
+        const second = await svc.submit(user, await png(95, 90), NOW);
+        if (second.kind !== 'draft') throw new Error('expected a draft');
+        expect(second.extraction.warnings).toContain('POSSIBLE_DUPLICATE');
+
+        const otherTotal = await svc.correct(user, { total: 51000 }, NOW);
+        expect(otherTotal?.extraction.warnings).not.toContain('POSSIBLE_DUPLICATE');
+
+        const backAgain = await svc.correct(user, { total: 45000 }, NOW);
+        expect(backAgain?.extraction.warnings).toContain('POSSIBLE_DUPLICATE');
+
+        const otherDay = await svc.correct(user, { date: '2026-10-05' }, NOW);
+        expect(otherDay?.extraction.warnings).not.toContain('POSSIBLE_DUPLICATE');
+      });
+
+      it('keeps the flag when the pending draft is shown again from the database', async () => {
+        const { svc } = service();
+        const user = await userEntity();
+        await svc.submit(user, await png(96, 40), NOW);
+        await svc.confirm(user, NOW);
+        await svc.submit(user, await png(97, 90), NOW);
+        const shown = await svc.pending(user, NOW);
+        expect(shown?.extraction.warnings).toContain('POSSIBLE_DUPLICATE');
+      });
     });
 
     it('limits drafts per hour', async () => {

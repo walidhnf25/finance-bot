@@ -6,9 +6,9 @@ Semua angka berasal dari run di mesin pengembangan.
 
 | Suite | Jumlah | Catatan |
 |---|---|---|
-| Unit (`npm test`) | **1.090** (54 suite) | parser, uang, validasi struk, breaker, semaphore, jaminan "tidak menulis ke disk", antrean OCR, metrik |
-| Integrasi (PostgreSQL asli) | **169** (10 suite) | constraint, idempotensi, konkurensi, isolasi, trigger tenant, migrasi pada database kosong, audit/retensi |
-| E2E (HTTP webhook, PostgreSQL asli) | **82** (6 suite) | termasuk `hardening` (kegagalan DB/AI/unduh, tak berwenang, batas kalender, mode `auto`), `lifecycle` (koneksi dilepas, restart berulang), observabilitas, privasi log |
+| Unit (`npm test`) | **1.111** (55 suite) | parser, uang, validasi struk, breaker, semaphore, jaminan "tidak menulis ke disk", antrean OCR, metrik |
+| Integrasi (PostgreSQL asli) | **177** (10 suite) | constraint, idempotensi, konkurensi, isolasi, trigger tenant, migrasi pada database kosong, audit/retensi |
+| E2E (HTTP webhook, PostgreSQL asli) | **84** (6 suite) | termasuk `hardening` (kegagalan DB/AI/unduh, tak berwenang, batas kalender, mode `auto`), `lifecycle` (koneksi dilepas, restart berulang), observabilitas, privasi log |
 | Antrean (`npm run test:queue`) | **26** (2 suite) | Redis nyata |
 | Injeksi kegagalan (`npm run test:failure`) | **18** (4 suite) | Docker: PostgreSQL/Redis dimatikan, cadangan, peran database terbatas |
 | Soak (`npm run test:soak`) | 1 skenario | lihat §4 |
@@ -38,11 +38,11 @@ Setiap hasil diklasifikasi dari laporan JSON Jest, bukan dari menghitung teks:
 Skrip juga memverifikasi bahwa baseline hijau lebih dulu (perintah uji dijalankan tanpa mutan) dan tidak pernah memodifikasi repositori (salinan di folder
 sementara; tautan `node_modules` dilepas sebelum salinan dihapus).
 
-### Hasil (89 mutan)
+### Hasil (97 mutan)
 
 | Kelas | Jumlah |
 |---|---|
-| Terbunuh oleh **asersi** | **81** |
+| Terbunuh oleh **asersi** | **89** |
 | Terbunuh oleh error aplikasi (tanpa asersi) | 8 (M09, M10, M11, M12, M14, M69, M72, M77: pelanggaran unique, kunci baris, timeout webhook, fallback Redis, pemberitahuan job gagal) |
 | Terbunuh hanya oleh timeout | 0 |
 | Terbunuh oleh crash tak terkait | 0 |

@@ -103,7 +103,7 @@ Aturan-aturan ini bukan konvensi lisan; `src/architecture.spec.ts` gagal bila di
 ## 6. Ketahanan
 
 - `fetchWithTimeout`, pembacaan body dibatasi, `withRetry` (backoff + jitter + `retry_after`).
-- `UpdateProcessor`: gagal → coba ulang; habis jatah → pengguna diberi tahu, update beracun tidak memblokir selamanya.
+- `UpdateProcessor`: gagal → coba ulang; habis jatah → pengguna diberi tahu, update beracun tidak memblokir selamanya. Update dari chat yang sama diproses satu per satu menurut urutan datang (penting pada mode webhook, yang bisa mengirim dua update serentak); chat berbeda tidak saling menunggu.
 - Poller menaikkan offset hanya setelah sukses; dedupe menandai pesan hanya setelah sukses.
 - `/health/live` tidak menyentuh dependensi; `/health/ready` memeriksa database + semua migrasi terapan; AI → `degraded`, tidak pernah `down` hanya karena OCR/AI.
 - Shutdown: `enableShutdownHooks`; worker OCR dan antrean dihentikan dengan batas waktu.

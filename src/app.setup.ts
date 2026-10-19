@@ -12,6 +12,10 @@ export function configureApp(app: INestApplication, options: { swagger: boolean 
   // No DTO-decorator validation pipe: the only body-taking route is the Telegram webhook, whose payload
   // is authenticated by its secret and then shape-checked by toIncomingMessage().
 
+  // Do not announce the framework to anyone who can reach the port.
+  const server = app.getHttpAdapter().getInstance() as { disable?: (setting: string) => unknown };
+  server.disable?.('x-powered-by');
+
   const config = app.get(ConfigService);
   if (options.swagger && config.get<boolean>('swagger.enabled', false)) {
     const swaggerPath = config.get<string>('swagger.path', 'docs');

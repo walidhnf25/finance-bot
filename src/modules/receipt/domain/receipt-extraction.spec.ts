@@ -203,6 +203,20 @@ describe('validateExtraction', () => {
     expect(again.total).toBe(45000);
     expect(again.warnings).toContain('TOTAL_NOT_IN_TEXT'); // the warning is not lost on reload
   });
+
+  it('keeps the possible-duplicate flag when a stored draft is read again', () => {
+    const first = validateExtraction(base, ctx());
+    const stored: unknown = JSON.parse(
+      JSON.stringify({ ...first, warnings: [...first.warnings, 'POSSIBLE_DUPLICATE'] }),
+    );
+    expect(reviveExtraction(stored, NOW, 'Asia/Jakarta').warnings).toContain('POSSIBLE_DUPLICATE');
+  });
+
+  it('drops warning names it does not know when a stored draft is read again', () => {
+    const first = validateExtraction(base, ctx());
+    const stored: unknown = JSON.parse(JSON.stringify({ ...first, warnings: ['NOT_A_WARNING'] }));
+    expect(reviveExtraction(stored, NOW, 'Asia/Jakarta').warnings).not.toContain('NOT_A_WARNING');
+  });
 });
 
 describe('sanitizeText', () => {

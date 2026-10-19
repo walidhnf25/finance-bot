@@ -108,6 +108,23 @@ describe('receipt photos (end to end)', () => {
   const txRows = async (telegramId: number) =>
     t.prisma.transaction.findMany({ where: { userId: await userId(telegramId) } });
 
+  it('the same receipt photographed again (another file) is flagged, but the user decides', async () => {
+    await say(USER, 'halo');
+    await say(USER, '1');
+    await say(USER, 'lewati');
+    const first = await sendPhoto(USER, await photoBytes(250));
+    expect(first).not.toContain('Sudah ada pengeluaran dengan nominal dan tanggal yang sama');
+    expect(await say(USER, 'ya')).toContain('Berhasil dicatat');
+
+    const second = await sendPhoto(USER, await photoBytes(120)); // different bytes, same receipt
+    expect(second).toContain('Sudah ada pengeluaran dengan nominal dan tanggal yang sama');
+    expect(second).toContain('Balas *ya*'); // still just a draft the user may confirm
+    expect(await txRows(USER)).toHaveLength(1); // nothing was recorded by the photo itself
+
+    expect(await say(USER, 'batal')).toContain('dibatalkan'); // the advice in the warning works
+    expect(await txRows(USER)).toHaveLength(1);
+  });
+
   it('photo -> preview -> "ya" records one expense; nothing is recorded before that', async () => {
     await say(USER, 'halo'); // creates the user (and sets wallet mode later)
     await say(USER, '1'); // cash only

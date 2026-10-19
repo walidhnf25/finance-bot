@@ -3,6 +3,7 @@ import { Prisma, ReceiptDraft as DraftRow } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { isUniqueViolation, PrismaService } from 'src/database/prisma.service';
 import { TransactionEntity } from 'src/modules/transaction/domain/transaction.entity';
+import { Money } from 'src/shared/utils/money';
 import { toTransactionEntity } from 'src/database/transaction.mapper';
 import {
   ConfirmResult,
@@ -119,6 +120,20 @@ export class PrismaReceiptRepository extends ReceiptRepository {
       data: { status: 'CANCELLED' },
     });
     return count === 1;
+  }
+
+  async hasExpenseLike(userId: string, amount: Money, from: Date, to: Date): Promise<boolean> {
+    const row = await this.prisma.transaction.findFirst({
+      where: {
+        userId,
+        type: 'EXPENSE',
+        amountMinor: amount.minorUnits,
+        deletedAt: null,
+        occurredAt: { gte: from, lt: to },
+      },
+      select: { id: true },
+    });
+    return row !== null;
   }
 
   countSince(userId: string, since: Date): Promise<number> {

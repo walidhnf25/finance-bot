@@ -138,12 +138,15 @@ export class ReceiptService {
       throw err;
     }
 
+    // The same receipt photographed again is a different file; compare it with what is already recorded.
+    const extraction = await this.flagPossibleDuplicate(user, outcome.extraction, now);
+
     // A fresh photo replaces any older draft the user never answered.
     const previous = await this.drafts.findPending(user.id, now);
     const created = await this.drafts.createDraft({
       userId: user.id,
       imageSha256: image.sha256,
-      extraction: outcome.extraction,
+      extraction,
       expiresAt: this.expiry(now),
       now,
     });
@@ -163,12 +166,12 @@ export class ReceiptService {
     await this.audit.record({
       userId: user.id,
       action: 'RECEIPT_DRAFT',
-      metadata: { method: outcome.method, warnings: outcome.extraction.warnings.length },
+      metadata: { method: outcome.method, warnings: extraction.warnings.length },
     });
     return {
       kind: 'draft',
       draft: created.draft,
-      extraction: outcome.extraction,
+      extraction,
       method: outcome.method,
     };
   }
@@ -224,11 +227,34 @@ export class ReceiptService {
     }
     // An explicit user value replaces the machine warnings it addresses; the rest stay.
     next = { ...next, warnings: [...new Set([...next.warnings, ...warnings])] };
+    // The amount or the date may have changed, so the duplicate check is done again.
+    next = await this.flagPossibleDuplicate(user, next, now);
 
     const expiresAt = this.expiry(now);
     const ok = await this.drafts.updateExtraction(user.id, draft.id, next, expiresAt);
     // The returned draft carries the NEW expiry, so the conversation does not keep the old (shorter) one.
     return ok ? { draft: { ...draft, extraction: next, expiresAt }, extraction: next } : null;
+  }
+
+  /**
+   * Adds `POSSIBLE_DUPLICATE` when the user already has an expense of the same amount on the same day
+   * (their own time zone), and removes a stale flag when there is none. Only a warning: the user decides.
+   */
+  private async flagPossibleDuplicate(
+    user: UserEntity,
+    extraction: ReceiptExtraction,
+    now: Date,
+  ): Promise<ReceiptExtraction> {
+    const rest = extraction.warnings.filter((w) => w !== 'POSSIBLE_DUPLICATE');
+    const day = extraction.date ?? dayjs(now).tz(user.timezone).format('YYYY-MM-DD');
+    const from = dayjs.tz(`${day} 00:00`, user.timezone);
+    const exists = await this.drafts.hasExpenseLike(
+      user.id,
+      Money.fromMajor(extraction.total),
+      from.toDate(),
+      from.add(1, 'day').toDate(),
+    );
+    return { ...extraction, warnings: exists ? [...rest, 'POSSIBLE_DUPLICATE'] : rest };
   }
 
   async cancel(user: UserEntity, now: Date): Promise<boolean> {

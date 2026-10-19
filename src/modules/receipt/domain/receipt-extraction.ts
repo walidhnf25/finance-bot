@@ -37,6 +37,7 @@ export type ReceiptWarning =
   | 'DATE_MISSING'
   | 'DATE_ADJUSTED' // the printed date was in the future; today is used instead
   | 'DATE_OLD' // the printed date is more than ~3 years ago: kept, but worth a look
+  | 'POSSIBLE_DUPLICATE' // an expense with the same amount on the same day is already recorded
   | 'MERCHANT_MISSING';
 
 export class InvalidExtractionError extends Error {
@@ -209,7 +210,8 @@ export function reviveExtraction(stored: unknown, now: Date, timezone: string): 
       w === 'TOTAL_CONFLICTS_WITH_PAYMENT' ||
       w === 'TOTAL_DISPUTED' ||
       w === 'TOTAL_UNLABELLED' ||
-      w === 'TOTAL_AMBIGUOUS',
+      w === 'TOTAL_AMBIGUOUS' ||
+      w === 'POSSIBLE_DUPLICATE',
   );
   return {
     ...revived,

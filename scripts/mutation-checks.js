@@ -1075,6 +1075,87 @@ const MUTANTS = [
     edits: [['ordered.length <= 4 &&', '']],
     detect: [UNIT('src/modules/parser/rule-based/rule-based.parser.spec.ts')],
   },
+  {
+    id: 'M90',
+    what: 'updates of one chat are processed concurrently instead of one at a time, in order',
+    file: 'src/modules/bot/infrastructure/update-processor.ts',
+    edits: [
+      [
+        'const previous = this.chats.get(key) ?? Promise.resolve();',
+        'const previous = Promise.resolve();',
+      ],
+    ],
+    detect: [UNIT('src/modules/bot/infrastructure/update-processor.spec.ts')],
+  },
+  {
+    id: 'M91',
+    what: "the duplicate-receipt check also matches other users' expenses",
+    file: RECEIPT_REPO,
+    edits: [
+      [
+        "        userId,\n        type: 'EXPENSE',",
+        "        ...(userId ? {} : { userId }),\n        type: 'EXPENSE',",
+      ],
+    ],
+    detect: [INT('receipt.spec.ts')],
+  },
+  {
+    id: 'M92',
+    what: 'the duplicate-receipt check also matches deleted expenses',
+    file: RECEIPT_REPO,
+    edits: [
+      [
+        '        deletedAt: null,\n        occurredAt: { gte: from, lt: to },',
+        '        occurredAt: { gte: from, lt: to },',
+      ],
+    ],
+    detect: [INT('receipt.spec.ts')],
+  },
+  {
+    id: 'M93',
+    what: 'a stale possible-duplicate flag stays on the draft after the user corrects the receipt',
+    file: RECEIPT_SVC,
+    edits: [
+      [
+        "warnings: exists ? [...rest, 'POSSIBLE_DUPLICATE'] : rest }",
+        "warnings: exists ? [...rest, 'POSSIBLE_DUPLICATE'] : extraction.warnings }",
+      ],
+    ],
+    detect: [INT('receipt.spec.ts')],
+  },
+  {
+    id: 'M94',
+    what: 'a new receipt photo is never compared with the expenses already recorded',
+    file: RECEIPT_SVC,
+    edits: [
+      [
+        'const extraction = await this.flagPossibleDuplicate(user, outcome.extraction, now);',
+        'const extraction = outcome.extraction;',
+      ],
+    ],
+    detect: [INT('receipt.spec.ts'), E2E('receipt.e2e-spec.ts')],
+  },
+  {
+    id: 'M95',
+    what: "the duplicate-receipt window is a whole year instead of the receipt's day",
+    file: RECEIPT_SVC,
+    edits: [["from.add(1, 'day').toDate()", "from.add(1, 'year').toDate()"]],
+    detect: [INT('receipt.spec.ts')],
+  },
+  {
+    id: 'M96',
+    what: 'the webhook secret header is no longer removed from log lines',
+    file: 'src/common/logger/logger.module.ts',
+    edits: [['  \'req.headers["x-telegram-bot-api-secret-token"]\',\n', '']],
+    detect: [UNIT('src/common/logger/logger.module.spec.ts')],
+  },
+  {
+    id: 'M97',
+    what: 'responses announce the framework (x-powered-by)',
+    file: 'src/app.setup.ts',
+    edits: [["server.disable?.('x-powered-by');", "server.disable?.('etag');"]],
+    detect: [E2E('bot.e2e-spec.ts')],
+  },
 ];
 
 const norm = (s) => s.replace(/\r\n/g, '\n');
