@@ -475,3 +475,58 @@ describe('RuleBasedParser: commands that look like descriptions', () => {
     expect((await parse(text)).type).toBe(type);
   });
 });
+
+// Moving money between wallets, changing a budget, an opening balance or the wallet setup change stored
+// settings. Like delete and edit they are commands only at the START of a message, and a transfer says nothing
+// else besides amounts, wallets and filler. Everything else is an ordinary expense.
+describe('RuleBasedParser: setting and wallet commands versus ordinary sentences', () => {
+  const parser = new RuleBasedParser();
+  const parse = (text: string): Promise<ParsedIntent> =>
+    parser.parse({ text, now: NOW, timezone: TZ });
+
+  it.each([
+    'ongkos pindah rumah 500rb',
+    'pindah kos 1jt',
+    'bayar jasa pindahan 300rb',
+    'makan siang budget 20rb',
+    'beli kopi budget hemat 20rb',
+    'bayar listrik tarik 200rb',
+    'beli tas atur dompet 50rb',
+    'sewa kos default 1jt',
+    'ongkos pindah rumah cash 500rb',
+    'beli pulsa default cash 10rb',
+    'beli sabun hapus noda pindah 20rb',
+  ])('records "%s" as an expense instead of changing a setting or moving money', async (text) => {
+    expect((await parse(text)).type).toBe(IntentType.RecordTransaction);
+  });
+
+  it('does not set an opening balance from a sentence that merely contains "saldo awal"', async () => {
+    expect((await parse('beli buku saldo awal 50rb')).type).not.toBe(IntentType.SetOpeningBalance);
+    expect((await parse('bayar cicilan saldo awal digital 1jt')).type).not.toBe(
+      IntentType.SetOpeningBalance,
+    );
+  });
+
+  it.each([
+    ['pindah 300rb dari cash ke digital', IntentType.Transfer],
+    ['pindahkan 300rb dari digital ke cash', IntentType.Transfer],
+    ['pindahin uang 200rb ke digital', IntentType.Transfer],
+    ['pindah 500rb', IntentType.Transfer],
+    ['tarik tunai 500rb', IntentType.Transfer],
+    ['tolong tarik tunai 500rb', IntentType.Transfer],
+    ['saya mau tarik tunai 500rb', IntentType.Transfer],
+    ['setor tunai 200rb', IntentType.Transfer],
+    ['batal pindah', IntentType.DeleteTransfer],
+    ['hapus transfer', IntentType.DeleteTransfer],
+    ['budget makan 2 juta', IntentType.SetBudget],
+    ['atur budget makan 2jt', IntentType.SetBudget],
+    ['tolong atur budget makan 2jt', IntentType.SetBudget],
+    ['anggaran transport 500rb', IntentType.SetBudget],
+    ['saldo awal cash 200rb', IntentType.SetOpeningBalance],
+    ['atur saldo awal digital 1jt', IntentType.SetOpeningBalance],
+    ['atur dompet', IntentType.SetupWallets],
+    ['default digital', IntentType.SetDefaultWallet],
+  ])('still treats "%s" as a command', async (text, type) => {
+    expect((await parse(text)).type).toBe(type);
+  });
+});

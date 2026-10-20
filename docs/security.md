@@ -33,6 +33,7 @@ Di luar cakupan: keamanan Telegram sebagai platform, keamanan fisik/OS mesin, ma
 | Timeout & batas ukuran respons untuk semua panggilan keluar | `http.ts`, `OllamaClient` | unit |
 | Log/audit privasi: tanpa isi pesan, nominal, atau teks struk; pesan error tanpa URL/token/body; jaring pengaman redaksi pino untuk header secret webhook, token, secret, apiKey, passphrase, URL database/Redis | `incoming-message.handler.ts`, `http.ts`, `LOG_REDACT_PATHS` | e2e (privasi log), `logger.module.spec.ts` (13), mutan M96 |
 | Header respons tidak menyebut framework (`x-powered-by` dimatikan) | `app.setup.ts` | e2e, mutan M97 |
+| Perintah yang mengubah data (hapus, ubah, reset, pindah, tarik, setor, budget, saldo awal, atur dompet, dompet utama) hanya berlaku di awal pesan | `rule-based.parser.ts` | `rule-based.parser.spec.ts`, `rule-based.parser.fuzz.spec.ts` (4.000 kalimat acak), mutan M98–M102 |
 | Update dari chat yang sama diproses berurutan (webhook bisa serentak) | `update-processor.ts` | `update-processor.spec.ts` (5 tes urutan), mutan M90 |
 | Struk yang sama dari berkas berbeda diberi peringatan `POSSIBLE_DUPLICATE` (tidak diblokir) | `receipt.service.ts`, `prisma-receipt.repository.ts` | integrasi (8), e2e, mutan M91–M95 |
 | Rahasia tidak masuk repo: `.env*`, `backups/`, `data/` di-ignore | `.gitignore` | pemeriksaan manual `git check-ignore` |
@@ -73,7 +74,7 @@ kerentanan libvips; hanya JPEG/PNG/WebP yang pernah didekode (setelah cek magic 
 - Tidak ada enkripsi *at rest* untuk volume Docker atau disk dari aplikasi. Cadangan database **terenkripsi** (GnuPG AES-256, lihat
   [perlindungan data](security/data-protection.md)); kehilangan passphrase berarti cadangan tidak bisa dipulihkan.
 - Tidak ada autentikasi pada API HTTP (hanya loopback). Jangan membukanya ke jaringan tanpa lapisan sendiri.
-- Uji mutasi adalah sampel guard (97 mutan), bukan mutasi penuh.
+- Uji mutasi adalah sampel guard (102 mutan), bukan mutasi penuh.
 - Jejak audit di database best-effort, bukan anti-ubah, dan tidak atomik dengan perubahan yang dicatat.
 - Pemeriksaan dilakukan oleh pembangun dan penilai otomatis; belum ada tinjauan manusia. Rencana menambahnya ada di [laporan proyek](project-report.md#5-keamanan).
 

@@ -1156,6 +1156,53 @@ const MUTANTS = [
     edits: [["server.disable?.('x-powered-by');", "server.disable?.('etag');"]],
     detect: [E2E('bot.e2e-spec.ts')],
   },
+  {
+    id: 'M98',
+    what: 'any sentence with a move word ("pindah rumah 500rb") becomes a wallet transfer',
+    file: PARSER,
+    edits: [['return ordered.every(', 'return ordered.some(']],
+    detect: [UNIT('src/modules/parser/rule-based/rule-based.parser.spec.ts')],
+  },
+  {
+    id: 'M99',
+    what: 'a budget word in the middle of a sentence ("makan siang budget 20rb") sets a budget',
+    file: PARSER,
+    edits: [
+      [
+        'return index >= 0 && index < 3 && ordered.slice(0, index).every((t) => COMMAND_PREFIX.has(t));',
+        'return index >= 0 && index < 3;',
+      ],
+    ],
+    detect: [UNIT('src/modules/parser/rule-based/rule-based.parser.spec.ts')],
+  },
+  {
+    id: 'M100',
+    what: 'the words "saldo awal" anywhere in a sentence set an opening balance',
+    file: PARSER,
+    edits: [['ordered.slice(0, saldoIndex).every((t) => COMMAND_PREFIX.has(t))', 'true']],
+    detect: [UNIT('src/modules/parser/rule-based/rule-based.parser.spec.ts')],
+  },
+  {
+    id: 'M101',
+    what: 'a default-wallet command is recognised inside a sentence that carries an amount',
+    file: PARSER,
+    edits: [
+      ['      ordered.length <= 5 &&\n      !/\\d/.test(raw)\n', '      ordered.length <= 50\n'],
+    ],
+    detect: [UNIT('src/modules/parser/rule-based/rule-based.parser.spec.ts')],
+  },
+  {
+    id: 'M102',
+    what: 'deleting a transfer works from the middle of a sentence ("beli sabun hapus pindah")',
+    file: PARSER,
+    edits: [
+      [
+        'if (deleteLeads && (moveWordUsed || deleteOnlyTransfer)) {',
+        'if ((has(DELETE_WORDS) || deleteLeads) && (moveWordUsed || deleteOnlyTransfer)) {',
+      ],
+    ],
+    detect: [UNIT('src/modules/parser/rule-based/rule-based.parser.spec.ts')],
+  },
 ];
 
 const norm = (s) => s.replace(/\r\n/g, '\n');

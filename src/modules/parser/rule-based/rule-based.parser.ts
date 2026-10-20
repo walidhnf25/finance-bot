@@ -37,6 +37,70 @@ import {
 
 const WALLET_WORDS = [...CASH_WALLET_WORDS, ...DIGITAL_WALLET_WORDS];
 
+/** Polite or introductory words that may come BEFORE a command word ("tolong atur budget makan 2jt"). */
+const COMMAND_PREFIX = new Set([
+  'tolong',
+  'mohon',
+  'dong',
+  'ya',
+  'saya',
+  'aku',
+  'mau',
+  'ingin',
+  'atur',
+  'set',
+  'buat',
+  'bikin',
+  'tetapkan',
+  'tentukan',
+  'tambah',
+  'tambahkan',
+  'isi',
+  'ubah',
+  'ganti',
+  'edit',
+]);
+
+/**
+ * Words that may accompany a wallet-moving command without turning it into an ordinary sentence:
+ * "pindah 500rb dari cash ke digital", "tolong tarik tunai 500rb", "pindahin uang 200rb ke digital".
+ * Any OTHER word ("pindah RUMAH 500rb", "bayar LISTRIK tarik 200rb") means this is a description.
+ */
+const MOVE_FILLER = new Set([
+  'tolong',
+  'mohon',
+  'dong',
+  'ya',
+  'saja',
+  'aja',
+  'saya',
+  'aku',
+  'mau',
+  'ingin',
+  'uang',
+  'duit',
+  'dana',
+  'saldo',
+  'sebesar',
+  'rp',
+  'rb',
+  'ribu',
+  'k',
+  'jt',
+  'juta',
+  'dari',
+  'ke',
+  'antar',
+  'dompet',
+  'tadi',
+  'itu',
+  'yang',
+  'terakhir',
+  'atm',
+  'bank',
+  'rekening',
+]);
+
 /**
  * Deterministic, dictionary + regex based parser. No external services.
  * Selected when PARSER_DRIVER=rule. Fully unit-tested and side-effect free.
@@ -137,10 +201,22 @@ export class RuleBasedParser extends MessageParser {
     ) {
       return { type: IntentType.ResetData, raw };
     }
-    if (tokens.has('dompet') && has(WALLET_SETUP_WORDS)) {
+    // Wallet setup, opening balance, default wallet and budget change stored settings, so, like delete and edit,
+    // they are commands only at the START of a message: "beli tas atur dompet 50rb", "makan siang budget 20rb"
+    // and "beli buku saldo awal 50rb" are expenses.
+    if (tokens.has('dompet') && leads(WALLET_SETUP_WORDS) && !/\d/.test(raw)) {
       return { type: IntentType.SetupWallets, raw };
     }
-    if (tokens.has('saldo') && tokens.has('awal')) {
+    const commandAt = (words: string[]): boolean => {
+      const index = ordered.findIndex((t) => words.includes(t));
+      return index >= 0 && index < 3 && ordered.slice(0, index).every((t) => COMMAND_PREFIX.has(t));
+    };
+    const saldoIndex = ordered.indexOf('saldo');
+    if (
+      saldoIndex >= 0 &&
+      ordered[saldoIndex + 1] === 'awal' &&
+      ordered.slice(0, saldoIndex).every((t) => COMMAND_PREFIX.has(t))
+    ) {
       return {
         type: IntentType.SetOpeningBalance,
         raw,
@@ -151,7 +227,12 @@ export class RuleBasedParser extends MessageParser {
           (tokens.has('nol') || /(^|\s)(rp\.?\s*)?0(\s|$)/.test(normalized) ? Money.zero() : null),
       };
     }
-    if (has(DEFAULT_WORDS) && this.detectWallet(tokens) !== null) {
+    if (
+      has(DEFAULT_WORDS) &&
+      this.detectWallet(tokens) !== null &&
+      ordered.length <= 5 &&
+      !/\d/.test(raw)
+    ) {
       return { type: IntentType.SetDefaultWallet, raw, wallet: this.detectWallet(tokens) };
     }
     const transfer = this.detectTransfer(raw, normalized, tokens, has);
@@ -172,7 +253,7 @@ export class RuleBasedParser extends MessageParser {
       const customRange = extractDateRange(raw, now, tz) ?? undefined;
       return { type: IntentType.Export, raw, period: this.detectPeriod(normalized), customRange };
     }
-    if (nearStart(BUDGET_WORDS)) {
+    if (commandAt(BUDGET_WORDS)) {
       const amount = extractAmount(raw)?.amount ?? null;
       const keywords = this.extractKeywords(raw, BUDGET_WORDS);
       return {
@@ -316,17 +397,35 @@ export class RuleBasedParser extends MessageParser {
     tokens: Set<string>,
     has: (words: string[]) => boolean,
   ): ParsedIntent | null {
-    const isMove = has(TRANSFER_WORDS);
-    const isWithdraw = tokens.has('tarik');
+    const ordered = tokenize(raw);
+    /**
+     * A wallet-moving command: its word is near the start and NOTHING ELSE is said besides amounts, wallets
+     * and filler. "pindah rumah 500rb" and "bayar listrik tarik 200rb" are expenses, not wallet transfers.
+     */
+    const isCommand = (words: string[]): boolean => {
+      const index = ordered.findIndex((t) => words.includes(t));
+      if (index < 0 || index >= 4) return false;
+      return ordered.every(
+        (t) =>
+          words.includes(t) ||
+          MOVE_FILLER.has(t) ||
+          /^(rp\.?)?\d/.test(t) ||
+          this.detectWallet(new Set([t])) !== null,
+      );
+    };
+    const moveWordUsed = has(TRANSFER_WORDS);
+    const isMove = isCommand(TRANSFER_WORDS);
+    const isWithdraw = isCommand(['tarik']);
     const isDeposit =
-      tokens.has('setor') &&
+      isCommand(['setor']) &&
       (tokens.has('tunai') || tokens.has('cash') || tokens.has('kas') || tokens.has('digital'));
     // "hapus transfer" alone is ambiguous with deleting a transaction tagged "transfer",
-    // so it only counts when nothing else is said.
+    // so it only counts when nothing else is said. Deleting is a command only at the start, as everywhere.
     const filler = new Set(['terakhir', 'dompet', 'antar', 'yang', 'tadi', 'itu']);
     const rest = [...tokens].filter((t) => !DELETE_WORDS.includes(t) && !filler.has(t));
-    const deleteOnlyTransfer = has(DELETE_WORDS) && rest.length === 1 && rest[0] === 'transfer';
-    if (has(DELETE_WORDS) && (isMove || deleteOnlyTransfer)) {
+    const deleteLeads = ordered.slice(0, 2).some((t) => DELETE_WORDS.includes(t));
+    const deleteOnlyTransfer = deleteLeads && rest.length === 1 && rest[0] === 'transfer';
+    if (deleteLeads && (moveWordUsed || deleteOnlyTransfer)) {
       return { type: IntentType.DeleteTransfer, raw };
     }
     if (!isMove && !isWithdraw && !isDeposit) return null;

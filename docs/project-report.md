@@ -135,10 +135,10 @@ Legenda: **VERIFIED** = dijalankan dan lulus · **PARTIAL** = sebagian terbukti 
 
 | Ukuran | Hasil |
 |---|---|
-| Unit / integrasi (PostgreSQL asli) / e2e (HTTP webhook asli) | **1.111 / 177 / 84** lulus, ditambah antrean **26** (Redis nyata) dan injeksi kegagalan **18** (Docker); `npm run verify` exit 0 |
+| Unit / integrasi (PostgreSQL asli) / e2e (HTTP webhook asli) | **1.143 / 177 / 84** lulus, ditambah antrean **26** (Redis nyata) dan injeksi kegagalan **18** (Docker); `npm run verify` exit 0 |
 | Typecheck, lint (0 error, 0 warning), format, build | lulus |
-| Soak (simulasi Telegram, PostgreSQL asli, kegagalan disuntik, restart) | 10 menit: 14.788 iterasi, 8.889 catatan = 8.889 baris, 3.390 struk = 3.390 draf `CONFIRMED`, 2.505 kegagalan DB disuntik, 59 restart + 708 pemutaran ulang → **0 duplikat** |
-| Uji mutasi pada guard uang/identitas/data | **97 mutan**: 89 terbunuh asersi, 8 oleh error aplikasi saja, **0 selamat**, 0 tak valid |
+| Soak (simulasi Telegram, PostgreSQL asli, kegagalan disuntik, restart) | 10 menit: 14.788 iterasi, 8.889 catatan = 8.889 baris, 3.390 struk = 3.390 draf `CONFIRMED`, 2.505 kegagalan DB disuntik, 59 restart + 708 pemutaran ulang → **0 duplikat**; run 300 detik berikutnya: 5.856 iterasi, 3.506 catatan = 3.506 baris, 1.306 struk = 1.306 draf `CONFIRMED`, 23 restart + 276 pemutaran ulang → **0 duplikat** |
+| Uji mutasi pada guard uang/identitas/data | **102 mutan**: 94 terbunuh asersi, 8 oleh error aplikasi saja, **0 selamat**, 0 tak valid |
 | Image Docker | terbangun; migrasi dari database kosong, OCR, crash, penghentian rapi, persistensi, tanpa Ollama (kontainer terpisah, token palsu) |
 | `npm run docker:verify` | hijau pada kontainer yang berjalan (memori 1 GiB, CPU 1,0, restart, hanya loopback) |
 
@@ -195,7 +195,7 @@ Tingkat di bawah ini indikatif, bukan hasil audit.
 - Tidak ada klaim "aman" atau "bebas cacat": hanya bahwa tidak ada cacat yang diketahui yang membuat data atau uang salah.
 - Tidak ada klaim akurasi OCR umum; himpunan uji sintetis tidak mewakili struk termal nyata.
 - Tidak ada klaim kesiapan produksi di server: belum dicoba dengan token asli atau di VPS.
-- Pengurai pesan obrolan bersifat heuristik; kata hapus/ubah hanya perintah di awal pesan dan angka satuan ukur tidak dibaca sebagai harga, tetapi pesan dengan banyak angka tetap tebakan (balasan menampilkan nominal yang dipakai).
+- Pengurai pesan obrolan bersifat heuristik; kata hapus, ubah, pindah, tarik, setor, budget, saldo awal, atur dompet, dan dompet utama hanya perintah di awal pesan (diuji juga dengan kalimat acak) dan angka satuan ukur tidak dibaca sebagai harga, tetapi pesan dengan banyak angka tetap tebakan (balasan menampilkan nominal yang dipakai).
 - Hasil model AI tidak deterministik; keamanan bertumpu pada validasi kode dan konfirmasi pengguna, bukan pada kepatuhan model.
 - Tinjauan dilakukan oleh pembangun dan penilai otomatis; tidak ada tinjauan manusia.
 

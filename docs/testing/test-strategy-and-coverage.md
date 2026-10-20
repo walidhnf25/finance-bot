@@ -6,13 +6,13 @@ Tanpa CI: gerbang satu perintah adalah `npm run verify`.
 
 | Tingkat | Perintah | Jumlah | Memakai | Yang dibuktikan |
 |---|---|---|---|---|
-| Unit | `npm test` | **1.111** tes di 55 suite | tanpa database | aturan murni: uang, pengurai, validasi struk, breaker, antrean OCR, metrik, interpretasi ya/tidak, interceptor, logika verifikator Docker |
+| Unit | `npm test` | **1.143** tes di 56 suite | tanpa database | aturan murni: uang, pengurai, validasi struk, breaker, antrean OCR, metrik, interpretasi ya/tidak, interceptor, logika verifikator Docker |
 | Integrasi | `npm run test:integration` | **177** tes di 10 suite | PostgreSQL asli (`finance_bot_test` saja, dijaga `db-guard.ts`) | constraint DB, idempotensi, konkurensi, isolasi, migrasi pada data nyata, audit/retensi |
 | E2E | `npm run test:e2e` | **84** tes di 6 suite | aplikasi utuh lewat HTTP webhook asli, Telegram diganti penangkap | alur pengguna, ketahanan, siklus hidup, observabilitas, privasi log |
 | Antrean | `npm run test:queue` | **26** tes di 2 suite | **Redis nyata** (kontainer profil `queue`, database 15) + PostgreSQL | BullMQ: dedupe, retry, dead letter, payload palsu, restart, shutdown, konkurensi, jadwal; pembacaan struk lewat antrean, fallback saat Redis mati |
 | Kegagalan | `npm run test:failure` | **18** tes di 4 suite | Docker: PostgreSQL dan Redis **sekali-pakai** yang di-stop/kill di bawah bot; skrip cadangan nyata; kontainer Linux | PostgreSQL mati/kill → 503, hidup, pulih, tepat sekali; Redis kill → fallback, pulih, AOF; cadangan terputus, ruang penuh, passphrase salah, file rusak, `.part` basi, gerbang integritas, peran database terbatas |
 | Soak | `npm run test:soak` (`SOAK_SECONDS=…`) | 1 skenario | PostgreSQL asli, kegagalan disuntik, restart | invarian jangka panjang |
-| Mutasi | `npm run test:mutation` | **97** mutan | salinan kerja sementara | tes benar-benar gagal bila guard dilemahkan |
+| Mutasi | `npm run test:mutation` | **102** mutan | salinan kerja sementara | tes benar-benar gagal bila guard dilemahkan |
 | Evaluasi OCR | `npm run receipt:eval` | 75 gambar sintetis + 1 nyata | OCR nyata | akurasi terukur, bukan klaim umum |
 | Live | `npm run receipt:live-check` | – | Ollama nyata | pemeriksaan manual pipeline OCR + model |
 
@@ -22,6 +22,7 @@ Tanpa CI: gerbang satu perintah adalah `npm run verify`.
 |---|---|---|
 | **Properti** (PRNG ber-seed, buatan sendiri; kegagalan mencetak seed dan input) | `src/shared/utils/money.property.spec.ts` (14), `test/integration/ledger-properties.spec.ts` (15) | tanpa dependensi tambahan; 3.000 kasus per properti uang; urutan operasi acak dicocokkan dengan model independen pada PostgreSQL |
 | **Konkurensi/ras** | `ledger-properties.spec.ts`, `receipt.spec.ts`, `audit-and-retention.spec.ts` | 25 pesan sama serentak → 1 baris; hapus 12× serentak → sekali; transfer serentak menjaga total; 8 konfirmasi paralel → 1 |
+| **Kalimat acak ber-seed** | `rule-based.parser.fuzz.spec.ts` | 4.000 kalimat pengeluaran dengan kata perintah di tengah tidak boleh berubah menjadi niat yang mengubah data; 2.000 teks acak tidak membuat parser gagal |
 | **Korpus bermusuhan** | `receipt-ai-safety.spec.ts` (124) | teks OCR berisi injeksi × dua model jinak/jahat tersimulasi; jawaban model bermusuhan; integritas prompt |
 | **Arsitektur sebagai tes** | `src/architecture.spec.ts` (7) | arah dependensi, tanpa siklus, daftar pengecualian tidak boleh basi |
 | **Pelingkupan pemilik statis + probe dinamis + trigger DB** | `src/user-scoping.spec.ts`, `isolation-probes.spec.ts` (16), `tenant-guards.spec.ts` | tes statis adalah *lint* teks, bukan bukti; pelindung nyata adalah trigger database |
